@@ -149,6 +149,20 @@ export class MemoryManager {
   }
 
   /**
+   * 插入或更新记忆条目（用于数据库加载）
+   */
+  upsertEntry(entry: MemoryEntry): void {
+    this.entries.set(entry.id, entry);
+  }
+
+  /**
+   * 获取所有记忆条目
+   */
+  getAllEntries(): MemoryEntry[] {
+    return Array.from(this.entries.values());
+  }
+
+  /**
    * 应用遗忘曲线
    * 返回应被遗忘的记忆 ID 列表
    */

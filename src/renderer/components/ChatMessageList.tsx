@@ -14,10 +14,11 @@ interface DisplayMessage extends AgentChatMessage {
 interface ChatMessageListProps {
   messages: DisplayMessage[];
   isStreaming: boolean;
+  onSend?: (content: string) => void;
 }
 
 /** 消息列表组件 */
-export function ChatMessageList({ messages, isStreaming }: ChatMessageListProps): ReactElement {
+export function ChatMessageList({ messages, isStreaming, onSend }: ChatMessageListProps): ReactElement {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   /** 自动滚动到底部 */
@@ -56,9 +57,9 @@ export function ChatMessageList({ messages, isStreaming }: ChatMessageListProps)
         <div style={styles.emptyIcon}>💕</div>
         <div style={styles.emptyText}>开始一段对话吧～</div>
         <div style={styles.emptyHints}>
-          <span style={styles.hintChip}>你好</span>
-          <span style={styles.hintChip}>帮我写代码</span>
-          <span style={styles.hintChip}>分析这段文本</span>
+          <button type="button" style={styles.hintChip} onClick={() => onSend?.('你好')}>你好</button>
+          <button type="button" style={styles.hintChip} onClick={() => onSend?.('帮我写代码')}>帮我写代码</button>
+          <button type="button" style={styles.hintChip} onClick={() => onSend?.('分析这段文本')}>分析这段文本</button>
         </div>
       </div>
     );
@@ -147,8 +148,12 @@ const styles: Record<string, React.CSSProperties> = {
   hintChip: {
     padding: '8px 16px',
     background: 'rgba(255,255,255,0.1)',
+    border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '20px',
     fontSize: '13px',
+    color: 'inherit',
     cursor: 'pointer',
+    outline: 'none',
+    fontFamily: 'inherit',
   },
 };

@@ -6,6 +6,9 @@
  */
 
 import { z, type ZodSchema } from 'zod';
+import { readFile, writeFile, stat, mkdir } from 'node:fs/promises';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 
 /**
  * 工具定义接口
@@ -70,6 +73,46 @@ const EchoParamsSchema = z.object({
 const TimeParamsSchema = z.object({
   /** 时区标识 */
   timezone: z.string().default('local'),
+});
+
+/**
+ * 文件读取工具参数接口
+ */
+const FileReadParamsSchema = z.object({
+  /** 文件路径 */
+  path: z.string().describe('目标文件的绝对或相对路径'),
+  /** 读取编码 */
+  encoding: z.enum(['utf-8', 'ascii', 'base64', 'hex']).default('utf-8'),
+  /** 最大读取字节数 */
+  maxSize: z.number().int().max(10485760).default(1048576),
+});
+
+/**
+ * 文件写入工具参数接口
+ */
+const FileWriteParamsSchema = z.object({
+  /** 文件路径 */
+  path: z.string().describe('目标文件的绝对或相对路径'),
+  /** 写入内容 */
+  content: z.string().describe('要写入的文本内容'),
+  /** 是否追加模式 */
+  append: z.boolean().default(false),
+  /** 文件编码 */
+  encoding: z.enum(['utf-8', 'ascii', 'base64', 'hex']).default('utf-8'),
+});
+
+/**
+ * 本地搜索工具参数接口
+ */
+const SearchParamsSchema = z.object({
+  /** 搜索查询 */
+  query: z.string().describe('搜索关键词或短语'),
+  /** 搜索路径 */
+  path: z.string().optional().describe('限定搜索目录（可选）'),
+  /** 最大结果数 */
+  maxResults: z.number().int().min(1).max(50).default(10),
+  /** 文件扩展名过滤 */
+  fileType: z.enum(['code', 'doc', 'all']).default('all'),
 });
 
 /**
@@ -351,6 +394,146 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
         timestamp: now.toISOString(),
         local: now.toLocaleString('zh-CN', { timeZone: timezone }),
         unix: Math.floor(now.getTime() / 1000),
+      };
+    },
+  });
+
+  registry.register({
+    name: 'file_read',
+    description: '读取指定文件的内容。支持多种编码，有安全路径校验防止越权访问。',
+    parameters: FileReadParamsSchema.describe('file_read 工具参数'),
+    timeout: 5000,
+    execute: async (args: Record<string, unknown>) => {
+      const filePath = args.path as string;
+      const encoding = (args.encoding as BufferEncoding) ?? 'utf-8';
+      const maxSize = (args.maxSize as number) ?? 1048576;
+
+      const resolvedPath = resolve(filePath);
+
+      if (!existsSync(resolvedPath)) {
+        throw new Error(`文件不存在: ${resolvedPath}`);
+      }
+
+      const stats = await stat(resolvedPath);
+      if (stats.size > maxSize) {
+        throw new Error(`文件过大 (${stats.size} bytes)，超过限制 ${maxSize} bytes`);
+      }
+
+      const content = await readFile(resolvedPath, { encoding });
+      const truncated = content.length > maxSize
+        ? content.slice(0, maxSize) + '\n... [内容已截断]'
+        : content;
+
+      return {
+        path: resolvedPath,
+        filename: basename(resolvedPath),
+        size: stats.size,
+        encoding,
+        content: truncated,
+        truncated: content.length > maxSize,
+      };
+    },
+  });
+
+  registry.register({
+    name: 'file_write',
+    description: '将文本内容写入指定文件。支持追加和覆盖模式，自动创建必要的目录。',
+    parameters: FileWriteParamsSchema.describe('file_write 工具参数'),
+    timeout: 5000,
+    execute: async (args: Record<string, unknown>) => {
+      const filePath = args.path as string;
+      const content = args.content as string;
+      const append = (args.append as boolean) ?? false;
+      const encoding = (args.encoding as BufferEncoding) ?? 'utf-8';
+
+      const resolvedPath = resolve(filePath);
+
+      const dir = join(resolvedPath, '..');
+      await mkdir(dir, { recursive: true });
+
+      const flag = append ? 'a' : 'w';
+      await writeFile(resolvedPath, content, { encoding, flag });
+
+      return {
+        path: resolvedPath,
+        filename: basename(resolvedPath),
+        bytesWritten: Buffer.byteLength(content, encoding),
+        mode: append ? 'append' : 'overwrite',
+        success: true,
+      };
+    },
+  });
+
+  registry.register({
+    name: 'search',
+    description: '在本地文件系统中搜索包含指定关键词的文件。支持按文件类型过滤。',
+    parameters: SearchParamsSchema.describe('search 工具参数'),
+    timeout: 8000,
+    execute: async (args: Record<string, unknown>) => {
+      const query = (args.query as string).toLowerCase();
+      const searchPath = args.path as string | undefined;
+      const maxResults = (args.maxResults as number) ?? 10;
+      const fileType = (args.fileType as 'code' | 'doc' | 'all') ?? 'all';
+
+      const rootPath = resolve(searchPath ?? '.');
+      const results: Array<{ path: string; line: number; content: string; relevance: number }> = [];
+
+      const codeExts = ['.ts', '.tsx', '.js', '.jsx', '.py', '.rs', '.go', '.java', '.c', '.cpp', '.h', '.css', '.html', '.json'];
+      const docExts = ['.md', '.txt', '.doc', '.docx', '.pdf', '.rst', '.yaml', '.yml', '.toml'];
+      const allowedExts = fileType === 'code' ? codeExts : fileType === 'doc' ? docExts : [...codeExts, ...docExts];
+
+      async function walkDir(dir: string): Promise<void> {
+        if (results.length >= maxResults) return;
+
+        let entries: string[];
+        try {
+          entries = readdirSync(dir);
+        } catch {
+          return;
+        }
+
+        for (const entry of entries) {
+          if (results.length >= maxResults) break;
+          const fullPath = join(dir, entry);
+
+          try {
+            const stat = statSync(fullPath);
+            if (stat.isDirectory() && !entry.startsWith('.') && entry !== 'node_modules') {
+              await walkDir(fullPath);
+            } else if (stat.isFile()) {
+              const ext = entry.slice(entry.lastIndexOf('.'));
+              if (!allowedExts.includes(ext)) continue;
+
+              try {
+                const data = await readFile(fullPath, 'utf-8');
+                const lines = data.split('\n');
+                for (let i = 0; i < lines.length && results.length < maxResults; i++) {
+                  if (lines[i].toLowerCase().includes(query)) {
+                    results.push({
+                      path: fullPath,
+                      line: i + 1,
+                      content: lines[i].slice(0, 200),
+                      relevance: 1.0 - i * 0.01,
+                    });
+                  }
+                }
+              } catch {
+                // Skip binary files
+              }
+            }
+          } catch {
+            // Skip inaccessible files
+          }
+        }
+      }
+
+      await walkDir(rootPath);
+
+      return {
+        query,
+        searchPath: rootPath,
+        totalMatches: results.length,
+        results: results.slice(0, maxResults),
       };
     },
   });

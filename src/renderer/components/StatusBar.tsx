@@ -11,6 +11,8 @@ interface StatusBarProps {
   modelTier: string;
   currentEmotion: EmotionType;
   contextUsage: { used: number; limit: number };
+  onViewMemory?: () => void;
+  onOpenSettings?: () => void;
 }
 
 /** 情感映射，键名与 EmotionType 枚举值保持一致 */
@@ -33,7 +35,7 @@ const EMOTION_LABELS: Record<string, { emoji: string; label: string }> = {
 };
 
 /** 状态组件 */
-export function StatusBar({ agentStatus, modelTier, currentEmotion, contextUsage }: StatusBarProps): ReactElement {
+export function StatusBar({ agentStatus, modelTier, currentEmotion, contextUsage, onViewMemory, onOpenSettings }: StatusBarProps): ReactElement {
   const emotionInfo = EMOTION_LABELS[currentEmotion] ?? EMOTION_LABELS.neutral;
   const contextPercent = Math.round((contextUsage.used / contextUsage.limit) * 100);
   const contextColor = contextPercent > 95 ? '#ff6363' : contextPercent > 70 ? '#ffc107' : '#4caf50';
@@ -118,8 +120,8 @@ export function StatusBar({ agentStatus, modelTier, currentEmotion, contextUsage
       <div style={styles.section}>
         <div style={styles.sectionTitle}>快捷操作</div>
         <div style={styles.quickActions}>
-          <button style={styles.actionButton}>📋 查看记忆</button>
-          <button style={styles.actionButton}>⚙️ 设置</button>
+          <button style={styles.actionButton} onClick={onViewMemory}>📋 查看记忆</button>
+          <button style={styles.actionButton} onClick={onOpenSettings}>⚙️ 设置</button>
         </div>
       </div>
     </div>

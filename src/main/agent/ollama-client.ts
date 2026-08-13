@@ -49,8 +49,10 @@ export class OllamaClient {
         method: 'GET',
         signal: AbortSignal.timeout(3000),
       });
+      console.log('[OllamaClient] healthCheck:', response.ok, response.status);
       return response.ok;
-    } catch {
+    } catch (err) {
+      console.error('[OllamaClient] healthCheck failed:', err);
       return false;
     }
   }
@@ -198,7 +200,10 @@ export class OllamaClient {
     onChunk: StreamCallback,
     signal?: AbortSignal,
   ): Promise<void> {
-    const response = await fetch(`${this.config.baseUrl}/api/chat`, {
+    const url = `${this.config.baseUrl}/api/chat`;
+    console.log('[OllamaClient] chatStream request:', { model: params.model, messagesCount: params.messages?.length ?? 0 });
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -212,8 +217,11 @@ export class OllamaClient {
       signal,
     });
 
+    console.log('[OllamaClient] chatStream response:', { status: response.status, ok: response.ok });
+
     if (!response.ok) {
-      throw new Error(`Ollama chat stream error: ${response.status}`);
+      const errorText = await response.text().catch(() => '');
+      throw new Error(`Ollama chat stream error: ${response.status} - ${errorText}`);
     }
 
     if (!response.body) {
@@ -223,12 +231,14 @@ export class OllamaClient {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let chunkCount = 0;
 
     try {
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) {
+          console.log('[OllamaClient] chatStream reader done, chunks:', chunkCount);
           onChunk('', true);
           break;
         }
@@ -242,7 +252,13 @@ export class OllamaClient {
 
           try {
             const chunk = JSON.parse(line) as { message: { content: string }; done: boolean };
-            onChunk(chunk.message.content, chunk.done);
+            chunkCount++;
+            if (chunk.message?.content) {
+              onChunk(chunk.message.content, chunk.done);
+            }
+            if (chunk.done) {
+              break;
+            }
           } catch {
             // 忽略解析错误的行
           }
@@ -250,8 +266,10 @@ export class OllamaClient {
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
+        console.log('[OllamaClient] chatStream aborted');
         return;
       }
+      console.error('[OllamaClient] chatStream error:', error);
       throw error;
     }
   }

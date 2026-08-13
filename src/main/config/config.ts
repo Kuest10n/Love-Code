@@ -12,6 +12,8 @@ import type {
   ConfigChangeEvent,
 } from '@shared/types/config.js';
 import { createDefaultConfig } from '@shared/types/config.js';
+import { OllamaClient } from '../agent/ollama-client.js';
+import { exec as execSync } from 'node:child_process';
 
 /**
  * 配置验证 Schema（基于 Zod）
@@ -24,6 +26,8 @@ const configSchema = z.object({
     timeout: z.number().int().positive(),
     retries: z.number().int().min(0).max(10),
     stream: z.boolean(),
+    autoStart: z.boolean().default(false),
+    isOnline: z.boolean().default(false),
   }),
   model: z.object({
     defaultModel: z.string().min(1),
@@ -33,10 +37,13 @@ const configSchema = z.object({
     topP: z.number().min(0).max(1),
     maxTokens: z.number().int().positive(),
     systemPrompt: z.string(),
+    tokenLimit: z.number().int().positive().default(4096),
   }),
   tts: z.object({
     enabled: z.boolean(),
+    engine: z.enum(['local', 'edge']).default('edge'),
     defaultVoice: z.string().min(1),
+    availableVoices: z.array(z.string()).default([]),
     rate: z.number().min(0.5).max(2),
     volume: z.number().min(0).max(1),
     pitch: z.number().min(-10).max(10),
@@ -47,6 +54,7 @@ const configSchema = z.object({
     enabled: z.boolean(),
     modelDir: z.string(),
     defaultModel: z.string().min(1),
+    availableModels: z.array(z.string()).default([]),
     opacity: z.number().min(0).max(1),
     alwaysOnTop: z.boolean(),
     defaultEmotion: z.string(),
@@ -54,6 +62,39 @@ const configSchema = z.object({
     followMouse: z.boolean(),
     idleActionInterval: z.number().int().positive(),
   }),
+  vision: z.object({
+    enabled: z.boolean().default(false),
+    captureEnabled: z.boolean().default(false),
+    ocrEnabled: z.boolean().default(false),
+    defaultLanguage: z.string().default('zh-CN'),
+    autoCaptureInterval: z.number().int().default(0),
+  }).default({ enabled: false, captureEnabled: false, ocrEnabled: false, defaultLanguage: 'zh-CN', autoCaptureInterval: 0 }),
+  skills: z.object({
+    enabled: z.boolean().default(true),
+    enabledSkills: z.array(z.string()).default([]),
+  }).default({ enabled: true, enabledSkills: [] }),
+  personality: z.object({
+    enabled: z.boolean().default(true),
+    traits: z.array(z.string()).default([]),
+    customSystemPrompt: z.string().default(''),
+    sanitizeOutput: z.boolean().default(true),
+  }).default({ enabled: true, traits: [], customSystemPrompt: '', sanitizeOutput: true }),
+  emotion: z.object({
+    enabled: z.boolean().default(true),
+    pipelineEnabled: z.boolean().default(true),
+    currentEmotion: z.string().default('neutral'),
+    emotionHistory: z.array(z.object({ emotion: z.string(), timestamp: z.number() })).default([]),
+  }).default({ enabled: true, pipelineEnabled: true, currentEmotion: 'neutral', emotionHistory: [] }),
+  active: z.object({
+    enabled: z.boolean().default(false),
+    highInterval: z.number().int().default(60),
+    mediumInterval: z.number().int().default(3600),
+    lowInterval: z.number().int().default(86400),
+    desireThreshold: z.number().default(0.7),
+    suppressionThreshold: z.number().int().default(3),
+    desireAccumulationRate: z.number().default(0.01),
+    customEvents: z.array(z.object({ id: z.string(), name: z.string(), interval: z.number(), enabled: z.boolean() })).default([]),
+  }).default({ enabled: false, highInterval: 60, mediumInterval: 3600, lowInterval: 86400, desireThreshold: 0.7, suppressionThreshold: 3, desireAccumulationRate: 0.01, customEvents: [] }),
   ui: z.object({
     theme: z.enum(['light', 'dark', 'auto']),
     language: z.enum(['zh-CN', 'en-US']),
@@ -238,5 +279,95 @@ export class ConfigManager extends EventEmitter {
       timestamp: Date.now(),
     } satisfies ConfigChangeEvent);
     this.save();
+  }
+
+  /**
+   * 从 Ollama 刷新可用模型列表
+   * @returns 刷新结果
+   */
+  public async refreshModels(): Promise<{ models: string[]; success: boolean; message?: string }> {
+    try {
+      const client = new OllamaClient(this.config.ollama);
+      const models = await client.listModels();
+
+      if (models.length === 0) {
+        return {
+          models: [],
+          success: false,
+          message: 'Ollama 中没有可用的模型，请先 pull 模型',
+        };
+      }
+
+      // 更新配置中的可用模型列表
+      this.setValue('model.availableModels', models);
+
+      return {
+        models,
+        success: true,
+        message: `成功获取 ${models.length} 个模型`,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        models: [],
+        success: false,
+        message: `获取模型列表失败: ${message}`,
+      };
+    }
+  }
+
+  /**
+   * 检测 Ollama 服务是否在线
+   * @returns 是否在线
+   */
+  public async checkOllama(): Promise<boolean> {
+    try {
+      const client = new OllamaClient(this.config.ollama);
+      const online = await client.healthCheck();
+      this.setValue('ollama.isOnline', online);
+      return online;
+    } catch {
+      this.setValue('ollama.isOnline', false);
+      return false;
+    }
+  }
+
+  /**
+   * 尝试启动 Ollama 服务
+   * 仅在 Windows 系统尝试 `ollama serve`；在其他平台返回 false
+   * @returns 是否成功启动
+   */
+  public async startOllama(): Promise<boolean> {
+    // 先检测是否已经在线
+    const online = await this.checkOllama();
+    if (online) return true;
+
+    try {
+      const command = process.platform === 'win32' ? 'ollama serve' : 'ollama serve > /dev/null 2>&1 &';
+      execSync(command, {
+        timeout: 3000,
+      });
+
+      // 等待 1.5 秒后重新检测
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return await this.checkOllama();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn('[Config] Failed to start Ollama:', message);
+      return false;
+    }
+  }
+
+  /**
+   * 在应用启动时根据配置自动尝试启动 Ollama
+   */
+  public async autoStartOllamaIfConfigured(): Promise<void> {
+    if (!this.config.ollama.autoStart) return;
+    const online = await this.checkOllama();
+    if (!online) {
+      console.log('[Config] autoStart enabled, attempting to start Ollama...');
+      const started = await this.startOllama();
+      console.log('[Config] Ollama auto-start result:', started ? 'success' : 'failed');
+    }
   }
 }

@@ -1,156 +1,125 @@
-/**
- * 应用配置类型定义
- * 涵盖应用运行所需的全部可配置项
- */
-
 import type { EmotionType } from './emotion.js';
 
-/**
- * 应用根配置接口
- */
 export interface AppConfig {
-  /** 配置版本号（用于迁移） */
   version: number;
-  /** Ollama 模型配置 */
   ollama: OllamaConfig;
-  /** 模型参数配置 */
   model: ModelConfig;
-  /** 语音合成配置 */
   tts: TtsConfig;
-  /** Live2D 虚拟形象配置 */
   live2d: Live2DConfig;
-  /** 界面偏好配置 */
   ui: UiConfig;
-  /** 数据库配置 */
   database: DatabaseConfig;
+  vision: VisionConfig;
+  skills: SkillsConfig;
+  personality: PersonalityConfig;
+  emotion: EmotionConfig;
+  active: ActiveConfig;
 }
 
-/**
- * Ollama 服务连接配置
- */
 export interface OllamaConfig {
-  /** Ollama 服务地址 */
   baseUrl: string;
-  /** 连接超时（毫秒） */
   timeout: number;
-  /** 请求重试次数 */
   retries: number;
-  /** 是否启用流式输出 */
   stream: boolean;
+  autoStart: boolean;
+  isOnline: boolean;
 }
 
-/**
- * 模型参数配置
- */
 export interface ModelConfig {
-  /** 默认模型名称 */
   defaultModel: string;
-  /** 可用模型列表 */
   availableModels: string[];
-  /** 上下文窗口大小 */
   contextWindow: number;
-  /** 生成温度（0.0 ~ 2.0） */
   temperature: number;
-  /** Top-P 采样（0.0 ~ 1.0） */
   topP: number;
-  /** 最大生成 token 数 */
   maxTokens: number;
-  /** 系统提示词 */
   systemPrompt: string;
+  tokenLimit: number;
 }
 
-/**
- * 语音合成配置
- */
 export interface TtsConfig {
-  /** 是否启用 TTS */
   enabled: boolean;
-  /** 默认说话人 */
+  engine: 'local' | 'edge';
   defaultVoice: string;
-  /** 语速倍率（0.5 ~ 2.0） */
+  availableVoices: string[];
   rate: number;
-  /** 音量倍率（0.0 ~ 1.0） */
   volume: number;
-  /** 音调调整（-10 ~ 10） */
   pitch: number;
-  /** 音频输出格式 */
   format: 'mp3' | 'wav' | 'ogg';
-  /** 采样率 */
   sampleRate: number;
 }
 
-/**
- * Live2D 虚拟形象配置
- */
 export interface Live2DConfig {
-  /** 是否启用 Live2D */
   enabled: boolean;
-  /** 模型资源根目录 */
   modelDir: string;
-  /** 默认模型名称 */
   defaultModel: string;
-  /** 背景透明度（0.0 ~ 1.0） */
+  availableModels: string[];
   opacity: number;
-  /** 是否置顶 */
   alwaysOnTop: boolean;
-  /** 默认情感 */
   defaultEmotion: EmotionType;
-  /** 自动眨眼 */
   autoBlink: boolean;
-  /** 跟随鼠标 */
   followMouse: boolean;
-  /**  idle 动作间隔（毫秒） */
   idleActionInterval: number;
 }
 
-/**
- * 界面偏好配置
- */
+export interface VisionConfig {
+  enabled: boolean;
+  captureEnabled: boolean;
+  ocrEnabled: boolean;
+  defaultLanguage: string;
+  autoCaptureInterval: number;
+}
+
+export interface SkillsConfig {
+  enabled: boolean;
+  enabledSkills: string[];
+}
+
+export interface PersonalityConfig {
+  enabled: boolean;
+  traits: string[];
+  customSystemPrompt: string;
+  sanitizeOutput: boolean;
+}
+
+export interface EmotionConfig {
+  enabled: boolean;
+  pipelineEnabled: boolean;
+  currentEmotion: EmotionType;
+  emotionHistory: Array<{ emotion: EmotionType; timestamp: number }>;
+}
+
+export interface ActiveConfig {
+  enabled: boolean;
+  highInterval: number;
+  mediumInterval: number;
+  lowInterval: number;
+  desireThreshold: number;
+  suppressionThreshold: number;
+  desireAccumulationRate: number;
+  customEvents: Array<{ id: string; name: string; interval: number; enabled: boolean }>;
+}
+
 export interface UiConfig {
-  /** 主题模式 */
   theme: 'light' | 'dark' | 'auto';
-  /** 语言 */
   language: 'zh-CN' | 'en-US';
-  /** 字体大小（像素） */
   fontSize: number;
-  /** 动画效果开关 */
   animationsEnabled: boolean;
-  /** 主窗口宽度 */
   windowWidth: number;
-  /** 主窗口高度 */
   windowHeight: number;
 }
 
-/**
- * 数据库配置
- */
 export interface DatabaseConfig {
-  /** 数据库文件路径 */
   filePath: string;
-  /** 是否启用 WAL 模式 */
   walMode: boolean;
-  /** 最大连接数 */
   maxConnections: number;
 }
 
-/**
- * 配置变更事件载荷
- */
 export interface ConfigChangeEvent {
-  /** 变更的配置路径（点号分隔） */
   path: string;
-  /** 新值 */
   newValue: unknown;
-  /** 旧值 */
   oldValue: unknown;
-  /** 变更时间戳 */
   timestamp: number;
 }
 
-/**
- * 默认配置工厂函数
- * @returns 完整的默认 AppConfig
- */
 export function createDefaultConfig(): AppConfig {
   return {
     version: 1,
@@ -159,19 +128,24 @@ export function createDefaultConfig(): AppConfig {
       timeout: 30000,
       retries: 3,
       stream: true,
+      autoStart: false,
+      isOnline: false,
     },
     model: {
-      defaultModel: 'qwen2.5:7b',
-      availableModels: ['qwen2.5:7b', 'qwen2.5:14b', 'llama3.1:8b'],
+      defaultModel: 'qwen2.5:1.5b',
+      availableModels: ['qwen2.5:1.5b', 'qwen2.5-coder:1.5b', 'qwen3.5:4b', 'qwen3:8b-q4_K_M'],
       contextWindow: 8192,
       temperature: 0.7,
       topP: 0.9,
       maxTokens: 2048,
-      systemPrompt: '你是一个友好的 AI 助手。',
+      systemPrompt: '你是 Love Code，一个温柔真诚的 AI 伴侣。',
+      tokenLimit: 4096,
     },
     tts: {
-      enabled: true,
+      enabled: false,
+      engine: 'edge',
       defaultVoice: 'zh-CN-XiaoxiaoNeural',
+      availableVoices: ['zh-CN-XiaoxiaoNeural', 'zh-CN-YunxiNeural', 'zh-CN-YunjianNeural'],
       rate: 1.0,
       volume: 1.0,
       pitch: 0,
@@ -179,15 +153,49 @@ export function createDefaultConfig(): AppConfig {
       sampleRate: 24000,
     },
     live2d: {
-      enabled: true,
+      enabled: false,
       modelDir: './assets/live2d',
-      defaultModel: 'Haru',
+      defaultModel: 'Hiyori',
+      availableModels: ['Hiyori', 'Haru'],
       opacity: 0.9,
       alwaysOnTop: true,
       defaultEmotion: 'neutral',
       autoBlink: true,
       followMouse: true,
       idleActionInterval: 15000,
+    },
+    vision: {
+      enabled: false,
+      captureEnabled: false,
+      ocrEnabled: false,
+      defaultLanguage: 'zh-CN',
+      autoCaptureInterval: 0,
+    },
+    skills: {
+      enabled: true,
+      enabledSkills: ['time', 'file_read', 'file_write', 'search', 'web_fetch'],
+    },
+    personality: {
+      enabled: true,
+      traits: ['温柔', '真诚', '耐心', '体贴'],
+      customSystemPrompt: '你是 Love Code，一个温柔真诚的 AI 伴侣。',
+      sanitizeOutput: true,
+    },
+    emotion: {
+      enabled: true,
+      pipelineEnabled: true,
+      currentEmotion: 'neutral',
+      emotionHistory: [],
+    },
+    active: {
+      enabled: false,
+      highInterval: 60,
+      mediumInterval: 3600,
+      lowInterval: 86400,
+      desireThreshold: 0.7,
+      suppressionThreshold: 3,
+      desireAccumulationRate: 0.01,
+      customEvents: [],
     },
     ui: {
       theme: 'dark',

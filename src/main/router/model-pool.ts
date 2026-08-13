@@ -153,6 +153,21 @@ export class ModelPool {
   }
 
   /**
+   * 设置常驻模型（L1）
+   * 用于运行时切换默认模型
+   */
+  setResidentModel(modelName: string): void {
+    const l1 = this.models.get(MODEL_TIER.L1);
+    if (l1) {
+      l1.name = modelName;
+      l1.status = MODEL_STATUS.READY;
+      l1.lastUsedAt = Date.now();
+      console.log('[ModelPool] L1 model set to:', modelName);
+      this.notifyListeners();
+    }
+  }
+
+  /**
    * 检查 L2 闲置超时
    */
   private checkIdleTimeout(): void {

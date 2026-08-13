@@ -12,6 +12,10 @@ import {
   STATE_CHANGE_CHANNELS,
   LIVE2D_ACTION_CHANNELS,
   TTS_CHUNK_CHANNELS,
+  CONVERSATION_CHANNELS,
+  CONFIG_CHANNELS,
+  CONTEXT_CHANNELS,
+  MEMORY_CHANNELS,
 } from '@shared/ipc-channels.js';
 import type {
   AgentChatMessage,
@@ -21,6 +25,13 @@ import type {
   Live2DActionPayload,
   TtsChunkPayload,
 } from '@shared/types/ipc.js';
+import type {
+  Conversation,
+  MessageRecord,
+  UpdateConversationInput,
+  AddMessageInput,
+} from '@shared/types/database.js';
+import type { AppConfig } from '@shared/types/config.js';
 import type { PreloadApi, Unsubscribe } from '@shared/types/preload-api.js';
 
 /**
@@ -53,6 +64,8 @@ function buildApi(): PreloadApi {
         ipcRenderer.invoke(AGENT_CHANNELS.SEND, message),
       onStream: (callback: (payload: ModelDeltaPayload) => void): Unsubscribe =>
         createListener<ModelDeltaPayload>(AGENT_CHANNELS.ON_STREAM, callback),
+      interrupt: (): void =>
+        ipcRenderer.send(AGENT_CHANNELS.INTERRUPT),
     },
     agentTool: {
       invoke: (payload: ToolCallPayload): Promise<ToolCallPayload> =>
@@ -85,6 +98,56 @@ function buildApi(): PreloadApi {
         createListener<TtsChunkPayload>(TTS_CHUNK_CHANNELS.ON_CHUNK, callback),
       onDone: (callback: (payload: TtsChunkPayload) => void): Unsubscribe =>
         createListener<TtsChunkPayload>(TTS_CHUNK_CHANNELS.ON_DONE, callback),
+    },
+    conversation: {
+      create: (title?: string): Promise<Conversation> =>
+        ipcRenderer.invoke(CONVERSATION_CHANNELS.CREATE, { title }),
+      list: (limit?: number, offset?: number): Promise<Conversation[]> =>
+        ipcRenderer.invoke(CONVERSATION_CHANNELS.LIST, { limit, offset }),
+      get: (id: string): Promise<Conversation | null> =>
+        ipcRenderer.invoke(CONVERSATION_CHANNELS.GET, id),
+      update: (id: string, updates: UpdateConversationInput): Promise<void> =>
+        ipcRenderer.invoke(CONVERSATION_CHANNELS.UPDATE, { id, updates }),
+      remove: (id: string): Promise<void> =>
+        ipcRenderer.invoke(CONVERSATION_CHANNELS.DELETE, id),
+      listMessages: (conversationId: string, limit?: number, offset?: number): Promise<MessageRecord[]> =>
+        ipcRenderer.invoke(CONVERSATION_CHANNELS.LIST_MESSAGES, { conversationId, limit, offset }),
+      addMessage: (input: AddMessageInput): Promise<MessageRecord> =>
+        ipcRenderer.invoke(CONVERSATION_CHANNELS.ADD_MESSAGE, input),
+    },
+    config: {
+      get: (): Promise<AppConfig> =>
+        ipcRenderer.invoke(CONFIG_CHANNELS.GET),
+      update: (path: string, value: unknown): Promise<void> =>
+        ipcRenderer.invoke(CONFIG_CHANNELS.UPDATE, { path, value }),
+      onChange: (callback: (event: { path: string; value: unknown }) => void): Unsubscribe =>
+        createListener<{ path: string; value: unknown }>(CONFIG_CHANNELS.ON_CHANGE, callback),
+      refreshModels: (): Promise<{ models: string[]; success: boolean; message?: string }> =>
+        ipcRenderer.invoke(CONFIG_CHANNELS.REFRESH_MODELS),
+      checkOllama: (): Promise<boolean> =>
+        ipcRenderer.invoke(CONFIG_CHANNELS.CHECK_OLLAMA),
+      startOllama: (): Promise<boolean> =>
+        ipcRenderer.invoke(CONFIG_CHANNELS.START_OLLAMA),
+    },
+    context: {
+      compress: (): Promise<{ success: boolean; savedTokens: number; message?: string }> =>
+        ipcRenderer.invoke(CONTEXT_CHANNELS.COMPRESS),
+      truncate: (): Promise<{ success: boolean; savedTokens: number; message?: string }> =>
+        ipcRenderer.invoke(CONTEXT_CHANNELS.TRUNCATE),
+      stats: (): Promise<{ totalTokens: number; hardLimit: number; level: 'normal' | 'soft-limit' | 'hard-limit'; messageCount: number }> =>
+        ipcRenderer.invoke(CONTEXT_CHANNELS.STATS),
+    },
+    memory: {
+      search: (query: string, limit?: number) =>
+        ipcRenderer.invoke(MEMORY_CHANNELS.SEARCH, { query, limit }),
+      add: (content: string, type?: string, metadata?: Record<string, unknown>, importance?: number) =>
+        ipcRenderer.invoke(MEMORY_CHANNELS.ADD, { content, type, metadata, importance }),
+      list: (limit?: number, type?: string) =>
+        ipcRenderer.invoke(MEMORY_CHANNELS.LIST, { limit, type }),
+      remove: (id: string) =>
+        ipcRenderer.invoke(MEMORY_CHANNELS.DELETE, id),
+      forget: () =>
+        ipcRenderer.invoke(MEMORY_CHANNELS.FORGET),
     },
   };
 }

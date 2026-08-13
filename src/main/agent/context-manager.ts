@@ -137,7 +137,14 @@ export class ContextManager {
   }
 
   /**
-   * 检查水位
+   * 检查水位（公开接口）
+   */
+  getLevel(): ContextLevel {
+    return this.checkLevel();
+  }
+
+  /**
+   * 检查水位（内部实现）
    */
   private checkLevel(): ContextLevel {
     const total = this.getTotalTokens();

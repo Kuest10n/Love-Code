@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "ollama": {
+    "baseUrl": "http://localhost:11434",
+    "timeout": 30000,
+    "retries": 3,
+    "stream": true
+  },
+  "model": {
+    "defaultModel": "qwen2.5:1.5b",
+    "availableModels": [
+      "qwen3:4b-instruct",
+      "qwen2.5-coder:3b",
+      "qwen3.5:4b",
+      "qwen2.5-coder:1.5b",
+      "qwen2.5:1.5b",
+      "translategemma:4b",
+      "qwen2.5-coder:7b",
+      "qwen3:8b-q4_K_M"
+    ],
+    "contextWindow": 8192,
+    "temperature": 0.7,
+    "topP": 0.9,
+    "maxTokens": 2048,
+    "systemPrompt": "你是一个友好的 AI 助手。"
+  },
+  "tts": {
+    "enabled": true,
+    "defaultVoice": "zh-CN-XiaoxiaoNeural",
+    "rate": 1,
+    "volume": 1,
+    "pitch": 0,
+    "format": "mp3",
+    "sampleRate": 24000
+  },
+  "live2d": {
+    "enabled": false,
+    "modelDir": "./assets/live2d",
+    "defaultModel": "Haru",
+    "opacity": 0.9,
+    "alwaysOnTop": true,
+    "defaultEmotion": "neutral",
+    "autoBlink": true,
+    "followMouse": true,
+    "idleActionInterval": 15000
+  },
+  "ui": {
+    "theme": "dark",
+    "language": "zh-CN",
+    "fontSize": 14,
+    "animationsEnabled": true,
+    "windowWidth": 1200,
+    "windowHeight": 800
+  },
+  "database": {
+    "filePath": "./data/app.db",
+    "walMode": true,
+    "maxConnections": 4
+  }
+}
