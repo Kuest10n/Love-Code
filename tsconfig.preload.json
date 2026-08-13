@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "outDir": "./dist/preload",
+    "rootDir": "./src",
+    "types": ["node"]
+  },
+  "include": ["src/preload/**/*", "src/shared/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+release/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database data
+data/
+*.db
+*.db-journal
+
+# Coverage
+coverage/
+
+# Trae spec files (local development artifacts)
+.trae/
+
+# Old skeleton (not part of Love Code)
+SimpleMultiAgentFramework/
+
+# Temporary images (not part of the project)
+image_1.jpg
+image_2.jpg
